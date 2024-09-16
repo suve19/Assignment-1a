@@ -5,15 +5,63 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <math.h>
 /* You will to add includes here */
 
 // Enable if you want debugging to be printed, see examble below.
 // Alternative, pass CFLAGS=-DDEBUG to make, make CFLAGS=-DDEBUG
 #define DEBUG
 
+// Helper function to perform the requested operation and store the result.
+void calculate_result(const char *operation, const char *value1, const char *value2, char *result) {
+    double val1, val2, res;
 
-// Included to get the support library
-#include <calcLib.h>
+    // Determine if the operation is on floating-point or integer numbers.
+    if (operation[0] == 'f') {  // Floating-point operations have a 'f' prefix .(e.g., fadd, fsub)
+        val1 = atof(value1);     // Convert strings to floats.
+        val2 = atof(value2);
+    } else {  // Integer operations
+        val1 = atoi(value1);     // Convert strings to integers.
+        val2 = atoi(value2);
+    }
+
+    // Perform the calculation based on the operation type.
+    if (strcmp(operation, "add") == 0) {
+        res = val1 + val2;
+        sprintf(result, "%d\n", (int)res);  // Store result as an integer.
+    } else if (strcmp(operation, "sub") == 0) {
+        res = val1 - val2;
+        sprintf(result, "%d\n", (int)res);
+    } else if (strcmp(operation, "mul") == 0) {
+        res = val1 * val2;
+        sprintf(result, "%d\n", (int)res);
+    } else if (strcmp(operation, "div") == 0) {
+        if (val2 == 0) {
+            sprintf(result, "ERROR\n");  // Handle division by zero error for integers.
+        } else {
+            res = val1 / val2;
+            sprintf(result, "%d\n", (int)res);  // Store the result of integer division.
+        }
+    } else if (strcmp(operation, "fadd") == 0) {
+        res = val1 + val2;
+        sprintf(result, "%8.8g\n", res);  // Store floating-point result.
+    } else if (strcmp(operation, "fsub") == 0) {
+        res = val1 - val2;
+        sprintf(result, "%8.8g\n", res);
+    } else if (strcmp(operation, "fmul") == 0) {
+        res = val1 * val2;
+        sprintf(result, "%8.8g\n", res);
+    } else if (strcmp(operation, "fdiv") == 0) {
+        if (fabs(val2) < 0.0001) {  // Handle floating-point division by near-zero.
+            sprintf(result, "ERROR\n");
+        } else {
+            res = val1 / val2;
+            sprintf(result, "%8.8g\n", res);
+        }
+    } else {
+        sprintf(result, "ERROR\n");  // Handle unknown operations.
+    }
+}
 
 // Function to validate the protocol response from the server.
 int validate_protocol_buffer(const char *buffer) {
@@ -128,11 +176,67 @@ int main(int argc, char *argv[]){
   }
 
   buffer[n] = '\0';  // Null-terminate the buffer.
-
-  if (validate_protocol_buffer(buffer)) {
-    printf("the buffer validation is successful.");
-  } else {
-    printf("The buffer validation is unsuccessfull.");
-  }
   
+  // Validate the protocol message from the server.
+  if (validate_protocol_buffer(buffer)) {
+    // Send "OK" to the server if the protocol is valid.
+    const char *ok_message = "OK\n";
+    ssize_t sent = write(sockfd, ok_message, strlen(ok_message));
+    if (sent < 0) {
+        perror("write");
+        close(sockfd);
+        return 1;
+    }
+
+    // Read the assigned operation and values from the server.
+    n = read(sockfd, buffer, sizeof(buffer) - 1);
+    if (n < 0) {
+        perror("read");
+        close(sockfd);
+        return 1;
+    }
+    buffer[n] = '\0';  // Null-terminate the buffer.
+    printf("ASSIGNMENT: %s", buffer);
+
+    // Parse the operation and values.
+    char operation[16], value1[32], value2[32];
+    sscanf(buffer, "%s %s %s", operation, value1, value2);
+
+    // Calculate the result based on the operation.
+    char result[64];
+    calculate_result(operation, value1, value2, result);
+
+    // Send the result back to the server.
+    sent = write(sockfd, result, strlen(result));
+    if (sent < 0) {
+        perror("write");
+        close(sockfd);
+        return 1;
+    }
+
+#ifdef DEBUG
+    printf("Calculated the result: %s", result);
+#endif
+
+    // Read the server's final response (OK or ERROR).
+    n = read(sockfd, buffer, sizeof(buffer) - 1);
+    if (n < 0) {
+        perror("read");
+        close(sockfd);
+        return 1;
+    }
+    buffer[n] = '\0';  // Null-terminate the buffer.
+
+    // Print the final confirmation
+    result[strcspn(result, "\n")] = '\0';  // Remove the trailing newline from the result.
+    printf("OK (myresult=%s)\n", result);
+
+    // Close the connection after the exchange is complete.
+    close(sockfd);
+  } else {
+    printf("Unexpected message from server: %s", buffer);
+    close(sockfd);
+    return 1;
+  }
+  return 0;
 }
