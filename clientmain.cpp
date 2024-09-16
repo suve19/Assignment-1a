@@ -15,6 +15,40 @@
 // Included to get the support library
 #include <calcLib.h>
 
+// Function to validate the protocol response from the server.
+int validate_protocol_buffer(const char *buffer) {
+    // Check if the buffer ends with two newlines, indicating the end of protocol versions.
+    size_t len = strlen(buffer);
+    if (len < 2 || strcmp(&buffer[len - 2], "\n\n") != 0) {
+        printf("Buffer does not end with an empty newline.\n");
+        return 0;
+    }
+
+    // Create a copy of the buffer to split it into lines.
+    char *buf_copy = strdup(buffer);
+    char *line = strtok(buf_copy, "\n");
+
+    int valid_protocol_found = 0;
+
+    // Loop through each line to check for valid "TEXT TCP" versions.
+    while (line != NULL) {
+        if (strncmp(line, "TEXT TCP", 8) == 0) {  // Check if the line starts with "TEXT TCP".
+            valid_protocol_found = 1;  // Set flag if a valid protocol is found.
+        }
+        line = strtok(NULL, "\n");  // Move to the next line.
+    }
+
+    free(buf_copy);  // Free the dynamically allocated memory.
+
+    // Ensure that at least one valid protocol was found.
+    if (!valid_protocol_found) {
+        printf("No valid protocol version found.\n");
+        return 0;
+    }
+
+    return 1;  // All checks passed.
+}
+
 int main(int argc, char *argv[]){
 
   /*
@@ -81,4 +115,24 @@ int main(int argc, char *argv[]){
     printf("Connected to %s:%d from local %s:%d\n", Desthost, port, local_ip, local_port);
 #endif
 
+  // Buffer to read data from the server.
+  char buffer[1024];
+  ssize_t n;
+
+  // Read the protocol version(s) from the server.
+  n = read(sockfd, buffer, sizeof(buffer) - 1);
+  if (n < 0) {
+      perror("read");
+      close(sockfd);
+      return 1;
+  }
+
+  buffer[n] = '\0';  // Null-terminate the buffer.
+
+  if (validate_protocol_buffer(buffer)) {
+    printf("the buffer validation is successful.");
+  } else {
+    printf("The buffer validation is unsuccessfull.");
+  }
+  
 }
