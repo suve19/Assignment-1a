@@ -3,16 +3,20 @@
 #include <stdlib.h>
 /* You will to add includes here */
 
+
+// Included to get the support library
+#include <calcLib.h>
+
 // Enable if you want debugging to be printed, see examble below.
 // Alternative, pass CFLAGS=-DDEBUG to make, make CFLAGS=-DDEBUG
 #define DEBUG
 
 
-// Included to get the support library
-#include <calcLib.h>
+using namespace std;
+
 
 int main(int argc, char *argv[]){
-
+  
   /*
     Read first input, assumes <ip>:<port> syntax, convert into one string (Desthost) and one integer (port). 
      Atm, works only on dotted notation, i.e. IPv4 and DNS. IPv6 does not work if its using ':'. 
@@ -25,9 +29,9 @@ int main(int argc, char *argv[]){
 
   /* Do magic */
   int port=atoi(Destport);
-#ifdef DEBUG 
+#ifdef DEBUG  
   printf("Host %s, and port %d.\n",Desthost,port);
 #endif
 
-  
+
 }

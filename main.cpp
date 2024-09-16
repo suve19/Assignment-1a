@@ -35,14 +35,20 @@ int main(int argc, char *argv[]){
   printf("ptr = %p, \t", ptr );
   printf("string = %s, \n", ptr );
   */
+  //  printf("Int\t");
+  i1=randomInt();
+  i2=randomInt();
+  //  printf("Float\t");
+  f1=randomFloat();
+  f2=randomFloat();
 
+  printf("  Int Values: %d %d \n",i1,i2);
+  printf("Float Values: %8.8g %8.8g \n",f1,f2);
+
+  
   /* Act differently depending on what operator you got, judge type by first char in string. If 'f' then a float */
   
   if(ptr[0]=='f'){
-    printf("Float\t");
-    f1=randomFloat();
-    f2=randomFloat();
-
     /* At this point, ptr holds operator, f1 and f2 the operands. Now we work to determine the reference result. */
    
     if(strcmp(ptr,"fadd")==0){
@@ -56,10 +62,6 @@ int main(int argc, char *argv[]){
     }
     printf("%s %8.8g %8.8g = %8.8g\n",ptr,f1,f2,fresult);
   } else {
-    printf("Int\t");
-    i1=randomInt();
-    i2=randomInt();
-
     if(strcmp(ptr,"add")==0){
       iresult=i1+i2;
     } else if (strcmp(ptr, "sub")==0){
@@ -80,6 +82,10 @@ int main(int argc, char *argv[]){
   ssize_t nread=0;
   printf("Print a command: ");
   nread=getline(&lineBuffer,&lenBuffer,stdin);
+  if (nread == -1 ) {
+    printf("getline failed.\n");
+    exit(1);
+  }
   
   printf("got:> %s \n",lineBuffer);
 
@@ -89,12 +95,22 @@ int main(int argc, char *argv[]){
   rv=0;
    
   rv=sscanf(lineBuffer,"%s",command);
-
+  if (rv == EOF ) {
+    printf("Sscanf failed.\n");
+    free(lineBuffer); // This is needed for the getline() as it will allocate memory (if the provided buffer is NUL).
+    exit(1);
+  }
+  
   printf("Command: |%s|\n",command);
   
   if(command[0]=='f'){
     printf("Float\t");
     rv=sscanf(lineBuffer,"%s %lg %lg",command,&f1,&f2);
+    if (rv == EOF ) {
+      printf("Sscanf failed.\n");
+      free(lineBuffer); // This is needed for the getline() as it will allocate memory (if the provided buffer is NUL).
+      exit(1);
+    }
     if(strcmp(command,"fadd")==0){
       fresult=f1+f2;
     } else if (strcmp(command, "fsub")==0){
@@ -108,6 +124,11 @@ int main(int argc, char *argv[]){
   } else {
     printf("Int\t");
     rv=sscanf(lineBuffer,"%s %d %d",command,&i1,&i2);
+    if (rv == EOF ) {
+      printf("Sscanf failed.\n");
+      free(lineBuffer); // This is needed for the getline() as it will allocate memory (if the provided buffer is NUL).
+      exit(1);
+    }
     if(strcmp(command,"add")==0){
       iresult=i1+i2;
     } else if (strcmp(command, "sub")==0){
@@ -115,8 +136,7 @@ int main(int argc, char *argv[]){
       printf("[%s %d %d = %d ]\n",command,i1,i2,iresult);
     } else if (strcmp(command, "mul")==0){
       iresult=i1*i2;
-    } else if (strcmp(command, "div")==0){
-      
+    } else if (strcmp(command, "div")==0){     
       iresult=i1/i2;
     } else {
       printf("No match\n");
@@ -124,9 +144,7 @@ int main(int argc, char *argv[]){
 
     printf("%s %d %d = %d \n",command,i1,i2,iresult);
   }
-  
-
-  
+   
 
   free(lineBuffer); // This is needed for the getline() as it will allocate memory (if the provided buffer is NUL).
   
