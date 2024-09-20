@@ -169,6 +169,12 @@ int main(int argc, char *argv[]){
   // Read the protocol version(s) from the server.
   n = read(sockfd, buffer, sizeof(buffer) - 1);
 
+
+  if (n > 100) {  // Check if the received bytes exceed 100, indicating a chargen server.
+    printf("Detected chargen server, closing connection.\n");
+    close(sockfd);
+    return 1;
+  }
   buffer[n] = '\0';  // Null-terminate the buffer.
   
   // Validate the protocol message from the server.
