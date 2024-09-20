@@ -2,7 +2,7 @@ CC_FLAGS= -Wall -I.
 LD_FLAGS= -Wall -L./ 
 
 
-all: libcalc test client server
+all: clean libcalc test client server
 
 servermain.o: servermain.cpp
 	$(CXX)  $(CC_FLAGS) $(CFLAGS) -c servermain.cpp 
@@ -31,4 +31,7 @@ libcalc: calcLib.o
 	ar -rc libcalc.a -o calcLib.o
 
 clean:
-	rm *.o *.a test server client
+	@if [ -f test ]; then rm test; fi
+	@if [ -f server ]; then rm server; fi
+	@if [ -f client ]; then rm client; fi
+	rm -f *.o *.a
