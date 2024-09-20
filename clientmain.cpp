@@ -10,7 +10,7 @@
 
 // Enable if you want debugging to be printed, see examble below.
 // Alternative, pass CFLAGS=-DDEBUG to make, make CFLAGS=-DDEBUG
-#define DEBUG
+// #define DEBUG
 
 // Helper function to perform the requested operation and store the result.
 void calculate_result(const char *operation, const char *value1, const char *value2, char *result) {
@@ -109,7 +109,6 @@ int main(int argc, char *argv[]){
   // *Desthost now points to a sting holding whatever came before the delimiter, ':'.
   // *Dstport points to whatever string came after the delimiter. 
 
-  /* Do magic */
   int port=atoi(Destport);
 
   if (port <= 0) {
@@ -169,11 +168,6 @@ int main(int argc, char *argv[]){
 
   // Read the protocol version(s) from the server.
   n = read(sockfd, buffer, sizeof(buffer) - 1);
-  if (n < 0) {
-      perror("read");
-      close(sockfd);
-      return 1;
-  }
 
   buffer[n] = '\0';  // Null-terminate the buffer.
   
@@ -182,19 +176,10 @@ int main(int argc, char *argv[]){
     // Send "OK" to the server if the protocol is valid.
     const char *ok_message = "OK\n";
     ssize_t sent = write(sockfd, ok_message, strlen(ok_message));
-    if (sent < 0) {
-        perror("write");
-        close(sockfd);
-        return 1;
-    }
-
+    
     // Read the assigned operation and values from the server.
     n = read(sockfd, buffer, sizeof(buffer) - 1);
-    if (n < 0) {
-        perror("read");
-        close(sockfd);
-        return 1;
-    }
+    
     buffer[n] = '\0';  // Null-terminate the buffer.
     printf("ASSIGNMENT: %s", buffer);
 
@@ -208,11 +193,6 @@ int main(int argc, char *argv[]){
 
     // Send the result back to the server.
     sent = write(sockfd, result, strlen(result));
-    if (sent < 0) {
-        perror("write");
-        close(sockfd);
-        return 1;
-    }
 
 #ifdef DEBUG
     printf("Calculated the result: %s", result);
@@ -220,11 +200,7 @@ int main(int argc, char *argv[]){
 
     // Read the server's final response (OK or ERROR).
     n = read(sockfd, buffer, sizeof(buffer) - 1);
-    if (n < 0) {
-        perror("read");
-        close(sockfd);
-        return 1;
-    }
+
     buffer[n] = '\0';  // Null-terminate the buffer.
 
     // Print the final confirmation
