@@ -4,8 +4,10 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <fcntl.h>  // For fcntl
 #include <errno.h>
 #include <math.h>
+#include <sys/time.h>  // For select()
 /* You will to add includes here */
 
 // Enable if you want debugging to be printed, see examble below.
@@ -96,55 +98,103 @@ int validate_protocol_buffer(const char *buffer) {
 
     return 1;  // All checks passed.
 }
+// Function to set socket to non-blocking mode.
+int set_socket_non_blocking(int sockfd) {
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags == -1) return -1;
+    return fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+}
 
-int main(int argc, char *argv[]){
+// Function to set socket to blocking mode again.
+int set_socket_blocking(int sockfd) {
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags == -1) return -1;
+    return fcntl(sockfd, F_SETFL, flags & ~O_NONBLOCK);
+}
 
-  /*
-    Read first input, assumes <ip>:<port> syntax, convert into one string (Desthost) and one integer (port). 
-     Atm, works only on dotted notation, i.e. IPv4 and DNS. IPv6 does not work if its using ':'. 
-  */
-  char delim[]=":";
-  char *Desthost=strtok(argv[1],delim);
-  char *Destport=strtok(NULL,delim);
-  // *Desthost now points to a sting holding whatever came before the delimiter, ':'.
-  // *Dstport points to whatever string came after the delimiter. 
+int main(int argc, char *argv[]) {
+    char delim[] = ":";
+    char *Desthost = strtok(argv[1], delim);
+    char *Destport = strtok(NULL, delim);
+    
+    int port = atoi(Destport);
 
-  int port=atoi(Destport);
-
-  if (port <= 0) {
+    if (port <= 0) {
         fprintf(stderr, "Invalid port number.\n");
         return 1;
     }
 
-  printf("Host: %s, Port: %d\n", Desthost, port);
+    printf("Host: %s, Port: %d\n", Desthost, port);
 
-  // Create a socket for the TCP connection using SOCK_STREAM.
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd < 0) {
-      perror("socket");
-      return 1;
-  }
+    // Create a socket for the TCP connection.
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("socket");
+        return 1;
+    }
 
-  // Set up the server address structure.
-  struct sockaddr_in servaddr;
-  memset(&servaddr, 0, sizeof(servaddr));
-  servaddr.sin_family = AF_INET;
-  servaddr.sin_port = htons(port);  // Convert port to network byte order.
+    struct sockaddr_in servaddr;
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(port);
 
-  // Convert the IP address to binary form and store it in servaddr.
-  if (inet_pton(AF_INET, Desthost, &servaddr.sin_addr) <= 0) {
-      perror("inet_pton");
-      close(sockfd);
-      return 1;
-  }
+    if (inet_pton(AF_INET, Desthost, &servaddr.sin_addr) <= 0) {
+        perror("inet_pton");
+        close(sockfd);
+        return 1;
+    }
 
-  // Attempt to connect to the server.
-  if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
-      perror("connect");
-      close(sockfd);
-      return 1;
-  }
+    // Set socket to non-blocking mode.
+    if (set_socket_non_blocking(sockfd) == -1) {
+        perror("non-blocking mode");
+        close(sockfd);
+        return 1;
+    }
 
+    // Start the connection attempt.
+    int result = connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    if (result < 0 && errno != EINPROGRESS) {
+        perror("connect");
+        close(sockfd);
+        return 1;
+    }
+
+    // Use select to wait for up to 19 seconds for the connection to complete.
+    fd_set writefds;
+    struct timeval timeout;
+
+    FD_ZERO(&writefds);
+    FD_SET(sockfd, &writefds);
+
+    timeout.tv_sec = 19;
+    timeout.tv_usec = 0;
+
+    result = select(sockfd + 1, NULL, &writefds, NULL, &timeout);
+    if (result <= 0) {
+        if (result == 0) {
+            fprintf(stderr, "Error: connection timed out.\n");
+        } else {
+            perror("select");
+        }
+        close(sockfd);
+        return 1;
+    }
+
+    // Check if the connection was successful.
+    int optval;
+    socklen_t optlen = sizeof(optval);
+    if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &optval, &optlen) == -1 || optval != 0) {
+        fprintf(stderr, "Error: connection failed with code.");
+        close(sockfd);
+        return 1;
+    }
+
+    // Set the socket back to blocking mode.
+    if (set_socket_blocking(sockfd) == -1) {
+        perror("set_socket_blocking");
+        close(sockfd);
+        return 1;
+    }
 // Retrieve and print the local IP and port after connection.
   struct sockaddr_in localaddr;
   socklen_t addrlen = sizeof(localaddr);
