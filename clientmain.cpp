@@ -6,12 +6,11 @@
 #include <sys/socket.h>
 #include <errno.h>
 #include <math.h>
-#include <netdb.h>     // For getaddrinfo()
 /* You will to add includes here */
 
 // Enable if you want debugging to be printed, see examble below.
 // Alternative, pass CFLAGS=-DDEBUG to make, make CFLAGS=-DDEBUG
-// #define DEBUG
+// #define DEBUG 
 
 // Helper function to perform the requested operation and store the result.
 void calculate_result(const char *operation, const char *value1, const char *value2, char *result) {
@@ -65,24 +64,20 @@ void calculate_result(const char *operation, const char *value1, const char *val
 }
 
 // Function to validate the protocol response from the server.
+// Function to validate the protocol response from the server.
 int validate_protocol_buffer(const char *buffer) {
-    // Check if the buffer ends with two newlines, indicating the end of protocol versions.
-    size_t len = strlen(buffer);
-    if (len < 2 || strcmp(&buffer[len - 2], "\n\n") != 0) {
-        printf("ERROR\n");
-        return 0;
-    }
+    // Check if the buffer contains a valid "TEXT TCP" protocol line.
+    int valid_protocol_found = 0;
 
     // Create a copy of the buffer to split it into lines.
     char *buf_copy = strdup(buffer);
     char *line = strtok(buf_copy, "\n");
 
-    int valid_protocol_found = 0;
-
     // Loop through each line to check for valid "TEXT TCP" versions.
     while (line != NULL) {
         if (strncmp(line, "TEXT TCP", 8) == 0) {  // Check if the line starts with "TEXT TCP".
             valid_protocol_found = 1;  // Set flag if a valid protocol is found.
+            break;  // Exit loop if valid protocol line is found.
         }
         line = strtok(NULL, "\n");  // Move to the next line.
     }
@@ -91,109 +86,75 @@ int validate_protocol_buffer(const char *buffer) {
 
     // Ensure that at least one valid protocol was found.
     if (!valid_protocol_found) {
-        printf("ERROR\n");
+        printf("No valid protocol version found.\n");
         return 0;
     }
 
-    return 1;  // All checks passed.
+    return 1;  // Protocol check passed.
 }
 
 
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <host:port>\n", argv[0]);
-        return 1;
-    }
-    /*
+int main(int argc, char *argv[]){
+
+  /*
     Read first input, assumes <ip>:<port> syntax, convert into one string (Desthost) and one integer (port). 
      Atm, works only on dotted notation, i.e. IPv4 and DNS. IPv6 does not work if its using ':'. 
-     *Desthost now points to a sting holding whatever came before the delimiter, ':'.
-    *Dstport points to whatever string came after the delimiter. 
   */
-    char delim[] = ":";
-    char *Desthost = strtok(argv[1], delim);
-    char *Destport = strtok(NULL, delim);
+  char delim[]=":";
+  char *Desthost=strtok(argv[1],delim);
+  char *Destport=strtok(NULL,delim);
+  // *Desthost now points to a sting holding whatever came before the delimiter, ':'.
+  // *Dstport points to whatever string came after the delimiter. 
 
-    if (!Desthost || !Destport) {
-        fprintf(stderr, "Usage: %s <host:port>\n", argv[0]);
-        return 1;
-    }
+  /* Do magic */
+  int port=atoi(Destport);
 
-    int port = atoi(Destport);
-    if (port <= 0) {
+  if (port <= 0) {
         fprintf(stderr, "Invalid port number.\n");
         return 1;
     }
 
-    printf("Host: %s, Port: %d\n", Desthost, port);
+  printf("Host: %s, Port: %d\n", Desthost, port);
 
-    struct addrinfo hints, *res, *p;
-    memset(&hints, 0, sizeof(hints));
+  // Create a socket for the TCP connection using SOCK_STREAM.
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) {
+      perror("socket");
+      return 1;
+  }
 
-    // Configure hints to allow both IPv4 and IPv6 and TCP (SOCK_STREAM)
-    hints.ai_family = AF_UNSPEC;      // Allow both IPv4 and IPv6
-    hints.ai_socktype = SOCK_STREAM;  // TCP stream sockets
+  // Set up the server address structure.
+  struct sockaddr_in servaddr;
+  memset(&servaddr, 0, sizeof(servaddr));
+  servaddr.sin_family = AF_INET;
+  servaddr.sin_port = htons(port);  // Convert port to network byte order.
 
-    // DNS resolution using getaddrinfo (converts hostname to IP)
-    int status = getaddrinfo(Desthost, Destport, &hints, &res);
-    if (status != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
-        return 1;
-    }
+  // Convert the IP address to binary form and store it in servaddr.
+  if (inet_pton(AF_INET, Desthost, &servaddr.sin_addr) <= 0) {
+      perror("inet_pton");
+      close(sockfd);
+      return 1;
+  }
 
-    int sockfd = -1;
-    // Loop through the list of resolved addresses and try to connect.
-    for (p = res; p != NULL; p = p->ai_next) {
-        // Create a socket
-        sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (sockfd < 0) {
-            perror("ERROR\n");
-            continue;
-        }
+  // Attempt to connect to the server.
+  if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+      perror("connect");
+      close(sockfd);
+      return 1;
+  }
 
-        // Try to connect to the address
-        if (connect(sockfd, p->ai_addr, p->ai_addrlen) < 0) {
-            perror("ERROR\n");
-            close(sockfd);
-            continue;
-        }
+// Retrieve and print the local IP and port after connection.
+  struct sockaddr_in localaddr;
+  socklen_t addrlen = sizeof(localaddr);
+  if (getsockname(sockfd, (struct sockaddr *)&localaddr, &addrlen) == -1) {
+      perror("getsockname");
+      close(sockfd);
+      return 1;
+  }
 
-        // Connection was successful, break out of the loop.
-        break;
-    }
-
-    // No connection was successful.
-    if (p == NULL) {
-        fprintf(stderr, "Error\n");
-        freeaddrinfo(res);
-        return 1;
-    }
-
-    // Free the address info memory
-    freeaddrinfo(res);
-
-    // Retrieve local IP and port.
-    struct sockaddr_storage localaddr;
-    socklen_t addrlen = sizeof(localaddr);
-    if (getsockname(sockfd, (struct sockaddr *)&localaddr, &addrlen) == -1) {
-        perror("ERROR");
-        close(sockfd);
-        return 1;
-    }
-
-    char local_ip[INET6_ADDRSTRLEN];
-    int local_port;
-
-    // Handle both IPv4 and IPv6 for displaying local IP and port
-    if (localaddr.ss_family == AF_INET) {  // IPv4
-        struct sockaddr_in *localaddr_in = (struct sockaddr_in *)&localaddr;
-        inet_ntop(AF_INET, &(localaddr_in->sin_addr), local_ip, INET_ADDRSTRLEN);
-        local_port = ntohs(localaddr_in->sin_port);
-    } else {  // IPv6
-        struct sockaddr_in6 *localaddr_in6 = (struct sockaddr_in6 *)&localaddr;
-        inet_ntop(AF_INET6, &(localaddr_in6->sin6_addr), local_ip, INET6_ADDRSTRLEN);
-        local_port = ntohs(localaddr_in6->sin6_port);
-    }
+  char local_ip[INET_ADDRSTRLEN];
+  inet_ntop(AF_INET, &localaddr.sin_addr, local_ip, INET_ADDRSTRLEN);
+  int local_port = ntohs(localaddr.sin_port);
 
 #ifdef DEBUG
     printf("Connected to %s:%d from local %s:%d\n", Desthost, port, local_ip, local_port);
@@ -205,13 +166,12 @@ int main(int argc, char *argv[]) {
 
   // Read the protocol version(s) from the server.
   n = read(sockfd, buffer, sizeof(buffer) - 1);
-
-
-  if (n > 100) {  // Check if the received bytes exceed 100, indicating a chargen server.
-    printf("ERROR\n");
-    close(sockfd);
-    return 1;
+  if (n < 0) {
+      perror("read");
+      close(sockfd);
+      return 1;
   }
+
   buffer[n] = '\0';  // Null-terminate the buffer.
   
   // Validate the protocol message from the server.
@@ -219,10 +179,19 @@ int main(int argc, char *argv[]) {
     // Send "OK" to the server if the protocol is valid.
     const char *ok_message = "OK\n";
     ssize_t sent = write(sockfd, ok_message, strlen(ok_message));
-    
+    if (sent < 0) {
+        perror("write");
+        close(sockfd);
+        return 1;
+    }
+
     // Read the assigned operation and values from the server.
     n = read(sockfd, buffer, sizeof(buffer) - 1);
-    
+    if (n < 0) {
+        perror("read");
+        close(sockfd);
+        return 1;
+    }
     buffer[n] = '\0';  // Null-terminate the buffer.
     printf("ASSIGNMENT: %s", buffer);
 
@@ -236,6 +205,11 @@ int main(int argc, char *argv[]) {
 
     // Send the result back to the server.
     sent = write(sockfd, result, strlen(result));
+    if (sent < 0) {
+        perror("write");
+        close(sockfd);
+        return 1;
+    }
 
 #ifdef DEBUG
     printf("Calculated the result: %s", result);
@@ -243,7 +217,11 @@ int main(int argc, char *argv[]) {
 
     // Read the server's final response (OK or ERROR).
     n = read(sockfd, buffer, sizeof(buffer) - 1);
-
+    if (n < 0) {
+        perror("read");
+        close(sockfd);
+        return 1;
+    }
     buffer[n] = '\0';  // Null-terminate the buffer.
 
     // Print the final confirmation
@@ -253,7 +231,7 @@ int main(int argc, char *argv[]) {
     // Close the connection after the exchange is complete.
     close(sockfd);
   } else {
-    printf("ERROR\n");
+    printf("Unexpected message from server: %s", buffer);
     close(sockfd);
     return 1;
   }
