@@ -6,7 +6,50 @@
 #include <cmath>
 #include <cstdlib>
 #include <calcLib.h>
+#include <poll.h>
 
+
+
+// Handles communication with a single client
+void handleClient(int comm_socket_) {
+    const int MAX_BUFFER_SIZE = 1024;
+    char buffer[MAX_BUFFER_SIZE] = {0};
+    struct pollfd poll_fds[1];
+    poll_fds[0].fd = comm_socket_;
+    poll_fds[0].events = POLLIN;
+
+    const char* protocol_msg = "TEXT TCP 1.0\n\n";
+    send(comm_socket_, protocol_msg, strlen(protocol_msg), 0);
+
+    if (poll(poll_fds, 1, 5000) <= 0) {
+        send(comm_socket_, "ERROR TO\n", 9, 0);
+        throw std::runtime_error("Timeout waiting for protocol response");
+    }
+
+    recv(comm_socket_, buffer, sizeof(buffer), 0);
+    if (std::string(buffer).substr(0, 2) != "OK") {
+        send(comm_socket_, "ERROR\n", 6, 0);
+        throw std::runtime_error("Protocol rejected by client");
+    }
+
+    std::string problem = generateProblem() + "\n";
+    send(comm_socket_, problem.c_str(), problem.length(), 0);
+
+    if (poll(poll_fds, 1, 5000) <= 0) {
+        send(comm_socket_, "ERROR TO\n", 9, 0);
+        throw std::runtime_error("Timeout waiting for solution");
+    }
+
+    recv(comm_socket_, buffer, sizeof(buffer), 0);
+    auto parts = split(problem, ' ');
+    std::string correct_solution = computeResult(parts[0], std::stod(parts[1]), std::stod(parts[2]));
+
+    if (std::string(buffer) == correct_solution) {
+        send(comm_socket_, "OK\n", 3, 0);
+    } else {
+        send(comm_socket_, "ERROR\n", 6, 0);
+    }
+}
 
 // Generate a random math problem
 std::string generateProblem() {
