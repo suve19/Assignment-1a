@@ -9,9 +9,11 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #include <unistd.h>    // For close()
 #include <cstring>     // For strlen()
 #include <iomanip>     // For setprecision()
+#include <arpa/inet.h>
 
 class MathServer {
 private:
@@ -54,18 +56,29 @@ private:
 
     // Initializes the server socket
     void initializeSocket() {
-        master_socket_ = socket(AF_INET, SOCK_STREAM, 0);
-        if (master_socket_ == -1) throw std::runtime_error("Failed to create socket");
+        struct addrinfo hints{}, *res;
+        hints.ai_family = AF_UNSPEC;  // Support both IPv4 and IPv6
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE;
 
-        struct sockaddr_in server_addr {};
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_port = htons(port_number_);
-        server_addr.sin_addr.s_addr = INADDR_ANY;
+        std::string port_str = std::to_string(port_number_);
+        if (getaddrinfo(ip_address_.c_str(), port_str.c_str(), &hints, &res) != 0) {
+            throw std::runtime_error("Failed to resolve address");
+        }
 
-        if (bind(master_socket_, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        master_socket_ = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+        if (master_socket_ == -1) {
+            freeaddrinfo(res);
+            throw std::runtime_error("Failed to create socket");
+        }
+
+        if (bind(master_socket_, res->ai_addr, res->ai_addrlen) == -1) {
             close(master_socket_);
+            freeaddrinfo(res);
             throw std::runtime_error("Failed to bind socket");
         }
+
+        freeaddrinfo(res);
 
         if (listen(master_socket_, 5) == -1) {
             close(master_socket_);
@@ -91,6 +104,15 @@ public:
             int comm_socket_ = accept(master_socket_, (struct sockaddr*)&client_addr, &addr_len);
 
             if (comm_socket_ == -1) continue;
+
+            char client_ip[INET6_ADDRSTRLEN];
+            if (client_addr.ss_family == AF_INET) {
+                inet_ntop(AF_INET, &(((struct sockaddr_in*)&client_addr)->sin_addr), client_ip, INET_ADDRSTRLEN);
+            } else if (client_addr.ss_family == AF_INET6) {
+                inet_ntop(AF_INET6, &(((struct sockaddr_in6*)&client_addr)->sin6_addr), client_ip, INET6_ADDRSTRLEN);
+            }
+
+            std::cout << "Connection from: " << client_ip << std::endl;
 
             try {
                 handleClient(comm_socket_);
