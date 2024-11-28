@@ -5,6 +5,27 @@
 #include <stdexcept>
 #include <cmath>
 #include <cstdlib>
+#include <calcLib.h>
+
+
+// Generate a random math problem
+std::string generateProblem() {
+    char* op = randomType();
+    std::ostringstream problem;
+    problem << std::fixed << std::setprecision(8);
+
+    if (op[0] == 'f') {
+        double a = randomFloat();
+        double b = randomFloat();
+        problem << op << " " << a << " " << b;
+    } else {
+        int a = randomInt();
+        int b = randomInt();
+        problem << op << " " << a << " " << b;
+    }
+
+    return problem.str();
+}
 
 class MathServer {
 private:
