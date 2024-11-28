@@ -3,6 +3,8 @@
 #include <string>
 #include <sstream>
 #include <stdexcept>
+#include <cmath>
+#include <cstdlib>
 
 class MathServer {
 private:
@@ -55,3 +57,30 @@ public:
         parseIPAndPort(arg);
     }
 };
+
+
+// Computes the result of mathematical operations
+std::string computeResult(const std::string& operation, double a, double b) {
+    std::ostringstream result;
+    result << std::fixed << std::setprecision(8);
+
+    if (operation == "fadd") return result << (a + b) << "\n", result.str();
+    if (operation == "fsub") return result << (a - b) << "\n", result.str();
+    if (operation == "fmul") return result << (a * b) << "\n", result.str();
+    if (operation == "fdiv") {
+        if (b == 0) throw std::runtime_error("Division by zero");
+        return result << (a / b) << "\n", result.str();
+    }
+
+    int ia = static_cast<int>(a);
+    int ib = static_cast<int>(b);
+    if (operation == "add") return result << (ia + ib) << "\n", result.str();
+    if (operation == "sub") return result << (ia - ib) << "\n", result.str();
+    if (operation == "mul") return result << (ia * ib) << "\n", result.str();
+    if (operation == "div") {
+        if (ib == 0) throw std::runtime_error("Division by zero");
+        return result << (ia / ib) << "\n", result.str();
+    }
+
+    throw std::runtime_error("Invalid operation");
+}
